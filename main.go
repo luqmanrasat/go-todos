@@ -42,6 +42,7 @@ func main() {
 	// TODO: check if error connecting to DB
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(POSTGRES_URI)))
 	db = bun.NewDB(sqldb, pgdialect.New())
+	defer db.Close()
 
 	// TODO: add migration
 	// _, err = db.NewCreateTable().Model((*Todo)(nil)).Exec(context.Background())
