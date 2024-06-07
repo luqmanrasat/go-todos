@@ -1,82 +1,149 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/driver/pgdriver"
 )
 
 type Todo struct {
-	ID        int    `json:"id"`
+	bun.BaseModel `bun:"table:todos,alias:t"`
+
+	ID        int64  `json:"id" bun:",pk,autoincrement,unique"`
 	Completed bool   `json:"completed"`
 	Body      string `json:"body"`
 }
 
+var db *bun.DB
+
 func main() {
 	fmt.Println("Hello world")
-	app := fiber.New()
 
+	// Load .env file
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("Error loading .env file", err)
 	}
 
+	// Connect to PostgreSQL
+	POSTGRES_URI := os.Getenv("POSTGRES_URI")
+	if POSTGRES_URI == "" {
+		log.Fatal("POSTGRES_URI is not set")
+	}
+	// TODO: check if error connecting to DB
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(POSTGRES_URI)))
+	db = bun.NewDB(sqldb, pgdialect.New())
+
+	// TODO: add migration
+	// _, err = db.NewCreateTable().Model((*Todo)(nil)).Exec(context.Background())
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	fmt.Println("Connected to PostgreSQL")
+
+	// Init web server
+	app := fiber.New()
+
+	// Set routes
+	app.Get("/api/todos", getTodos)
+	app.Post("/api/todos", createTodo)
+	app.Patch("/api/todos/:id", updateTodo)
+	app.Delete("/api/todos/:id", deleteTodo)
+
+	// Start web server
 	PORT := os.Getenv("PORT")
+	if PORT == "" {
+		PORT = "5000"
+	}
+	log.Fatal(app.Listen("0.0.0.0:" + PORT))
+}
 
-	todos := []Todo{}
+func getTodos(c *fiber.Ctx) error {
+	var todos []Todo
 
-	app.Get("/api/todos", func(c *fiber.Ctx) error {
-		return c.Status(200).JSON(todos)
-	})
+	err := db.NewSelect().Model(&todos).Scan(context.Background())
+	if err != nil {
+		return err
+	}
 
-	// Create a Todo
-	app.Post("/api/todos", func(c *fiber.Ctx) error {
-		todo := &Todo{}
+	return c.JSON(todos)
+}
 
-		if err := c.BodyParser(todo); err != nil {
-			return err
-		}
+func createTodo(c *fiber.Ctx) error {
+	todo := &Todo{}
 
-		if todo.Body == "" {
-			return c.Status(400).JSON(fiber.Map{"error": "Todo body is required"})
-		}
+	if err := c.BodyParser(todo); err != nil {
+		return err
+	}
 
-		todo.ID = len(todos) + 1
-		todos = append(todos, *todo)
+	if todo.Body == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Todo body cannot be empty"})
+	}
 
-		return c.Status(201).JSON(todo)
-	})
+	_, err := db.NewInsert().Model(todo).Exec(context.Background())
+	if err != nil {
+		return err
+	}
 
-	// Update a Todo
-	app.Patch("/api/todos/:id", func(c *fiber.Ctx) error {
-		id := c.Params("id")
+	return c.Status(201).JSON(*todo)
+}
 
-		for i, todo := range todos {
-			if fmt.Sprint(todo.ID) == id {
-				todos[i].Completed = true
-				return c.Status(200).JSON(todos[i])
-			}
-		}
+func updateTodo(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+	}
 
-		return c.Status(404).JSON(fiber.Map{"error": "Todo not found"})
-	})
+	todo := &Todo{ID: int64(id), Completed: true}
 
-	// Delete a Todo
-	app.Delete("/api/todos/:id", func(c *fiber.Ctx) error {
-		id := c.Params("id")
+	res, err := db.NewUpdate().Model(todo).Column("completed").WherePK().Exec(context.Background())
+	if err != nil {
+		return err
+	}
 
-		for i, todo := range todos {
-			if fmt.Sprint(todo.ID) == id {
-				todos = append(todos[:i], todos[i+1:]...)
-				return c.Status(200).JSON(fiber.Map{"success": true})
-			}
-		}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 
-		return c.Status(404).JSON(fiber.Map{"error": "Todo not found"})
-	})
+	if rows < 1 {
+		return c.Status(404).JSON(fiber.Map{"error": "Todo ID not found"})
+	}
 
-	log.Fatal(app.Listen(":" + PORT))
+	return c.Status(200).JSON(fiber.Map{"success": true})
+}
+
+func deleteTodo(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+	}
+
+	todo := &Todo{ID: int64(id)}
+
+	res, err := db.NewDelete().Model(todo).WherePK().Exec(context.Background())
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows < 1 {
+		return c.Status(404).JSON(fiber.Map{"error": "Todo ID not found"})
+	}
+
+	return c.Status(200).JSON(fiber.Map{"success": true})
 }
