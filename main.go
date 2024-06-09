@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -18,7 +19,7 @@ import (
 type Todo struct {
 	bun.BaseModel `bun:"table:todos,alias:t"`
 
-	ID        int64  `json:"id" bun:",pk,autoincrement,unique"`
+	ID        int64  `json:"id"        bun:",pk,autoincrement,unique"`
 	Completed bool   `json:"completed"`
 	Body      string `json:"body"`
 }
@@ -29,9 +30,11 @@ func main() {
 	fmt.Println("Hello world")
 
 	// Load .env file
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatal("Error loading .env file", err)
+	if os.Getenv("ENV") != "production" {
+		err := godotenv.Load(".env")
+		if err != nil {
+			log.Fatal("Error loading .env file", err)
+		}
 	}
 
 	// Connect to PostgreSQL
@@ -43,7 +46,7 @@ func main() {
 	db = bun.NewDB(sqldb, pgdialect.New())
 	defer db.Close()
 
-	err = db.Ping()
+	err := db.Ping()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -58,6 +61,15 @@ func main() {
 
 	// Init web server
 	app := fiber.New()
+
+	if os.Getenv("ENV") == "producion" {
+		app.Static("/", "./client/dist")
+	} else {
+		app.Use(cors.New(cors.Config{
+			AllowOrigins: "http://localhost:5173",
+			AllowHeaders: "Origin,Content-Type,Accept",
+		}))
+	}
 
 	// Set routes
 	app.Get("/api/todos", getTodos)
