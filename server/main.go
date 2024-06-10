@@ -63,7 +63,7 @@ func main() {
 	app := fiber.New()
 
 	if os.Getenv("ENV") == "production" {
-		app.Static("/", "../client/dist")
+		app.Static("/", "../client-solid/dist")
 	} else {
 		app.Use(cors.New(cors.Config{
 			AllowOrigins: "http://localhost:5173",
