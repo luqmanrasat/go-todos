@@ -3,12 +3,11 @@ export default {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
   ],
-  darkMode: "selector",
   theme: {
     extend: {},
   },
   plugins: [
     require('daisyui'),
   ],
+  darkMode: ['class', '[data-theme="dark"]']
 }
-

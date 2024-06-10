@@ -7,9 +7,6 @@ export const modes = {
 type ThemeMode = typeof modes[keyof typeof modes];
 
 const [colorMode, setColorMode] = createSignal("light");
-createEffect(() => {
-  document.documentElement.dataset.theme = colorMode();
-});
 
 const toggleTheme = (): void => {
   if (colorMode() === "dark") {
@@ -31,6 +28,10 @@ export const ThemeProvider: ParentComponent<{ mode?: ThemeMode }> = (props) => {
   if (props.mode) {
     setColorMode(props.mode)
   }
+
+  createEffect(() => {
+    document.documentElement.dataset.theme = colorMode();
+  });
 
   return (
     <ThemeContext.Provider value={theme}>

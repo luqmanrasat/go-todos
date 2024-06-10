@@ -4,11 +4,16 @@ import { render } from 'solid-js/web'
 import './index.css'
 import App from './App'
 import { ThemeProvider } from './providers/ThemeProvider'
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query'
+
+const queryClient = new QueryClient();
 
 const root = document.getElementById('root')
 
 render(() => (
-  <ThemeProvider mode='dark'>
-    <App />
-  </ThemeProvider>
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider mode='dark'>
+      <App />
+    </ThemeProvider>
+  </QueryClientProvider>
 ), root!)
