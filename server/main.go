@@ -121,7 +121,12 @@ func updateTodo(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
 	}
 
-	todo := &Todo{ID: int64(id), Completed: true}
+	todo := &Todo{}
+	if err := c.BodyParser(todo); err != nil {
+		return err
+	}
+
+	todo.ID = int64(id)
 
 	res, err := db.NewUpdate().Model(todo).Column("completed").WherePK().Exec(context.Background())
 	if err != nil {
